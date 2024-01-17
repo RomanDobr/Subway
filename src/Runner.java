@@ -1,7 +1,7 @@
-package metro;
+package metro.src;
 
 import java.time.Duration;
-import metro.subway.Subway;
+import metro.src.subway.Subway;
 
 
 public class Runner {

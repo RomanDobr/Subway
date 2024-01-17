@@ -1,4 +1,4 @@
-package metro.subway;
+package metro.src.subway;
 
 import java.time.Duration;
 import java.util.ArrayList;
