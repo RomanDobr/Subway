@@ -1,7 +1,10 @@
 package metro.src.subway;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 public class Station {
     private String name;
@@ -9,8 +12,9 @@ public class Station {
     private String nextStation;
     private Duration drivingTime;
     private SubwayLine subwayLine;
-    private ArrayList<Station> changeLines;
+    private List<Station> changeLines;
     private Subway subway;
+    private Cash cash;
 
     public Station(String name, SubwayLine subwayLine, Subway subway, String prevStation,
                    String nextStation, Duration drivingTime,  ArrayList<Station> changeLines) {
@@ -21,6 +25,14 @@ public class Station {
         this.subwayLine = subwayLine;
         this.changeLines = changeLines;
         this.subway = subway;
+        this.cash = new Cash();
+    }
+
+    public Station(String name, SubwayLine subwayLine, Subway subway) {
+        this.name = name;
+        this.subwayLine = subwayLine;
+        this.subway = subway;
+        this.cash = new Cash();
     }
 
     public String getName() {
@@ -63,15 +75,19 @@ public class Station {
         this.subwayLine = subwayLine;
     }
 
-    public ArrayList<Station> getChangeLines() {
+    public List<Station> getChangeLines() {
         return changeLines;
+    }
+
+    public Subway getSubway() {
+        return subway;
     }
 
     public void setChangeLines(ArrayList<Station> changeLines) {
         this.changeLines = changeLines;
     }
 
-    private String getNameLine() {
+    protected ColorLine getNameLine() {
         if (this.changeLines != null) {
             for (Station station : this.changeLines) {
                 return station.getSubwayLine().getColor();
@@ -80,13 +96,30 @@ public class Station {
         return null;
     }
 
+    public Map<LocalDate, Double> ticketSelling(LocalDate localDate, String nameStartStation, String nameEndStation) {
+        if (nameStartStation.equals(nameEndStation)) {
+            return null;
+        }
+        int countStage = subway.getCountStageDifferentLines(nameStartStation, nameEndStation);
+        double summa = (countStage * 5) + 20;
+        Map<LocalDate, Double> mapTmp = this.cash.income;
+        if (mapTmp.size() != 0) {
+            for (Map.Entry<LocalDate, Double> pair : mapTmp.entrySet()) {
+                if (pair.getKey() == localDate) {
+                    double value = pair.getValue() + summa;
+                    pair.setValue(value);
+                }
+            }
+            return mapTmp;
+        }
+        this.cash.income.put(localDate, summa);
+        return mapTmp;
+    }
+
     @Override
     public String toString() {
         return "Station{"
                 + "name='" + name + '\''
                 + ", changeLines=" + this.getNameLine() + '}';
     }
-
-
-
 }

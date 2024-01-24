@@ -1,31 +1,33 @@
 package metro.src.subway;
 
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 public class SubwayLine {
-    private String color;
-    private ArrayList<Station> stationsOnLine = new ArrayList<>();
+    private ColorLine color;
+    private List<Station> stationsOnLine = new ArrayList<>();
     private Subway subway;
 
-    public SubwayLine(String color, ArrayList<Station> stationsOnLine, Subway subway) {
+    public SubwayLine(ColorLine color, List<Station> stationsOnLine, Subway subway) {
         this.color = color;
         this.subway = subway;
         this.stationsOnLine = stationsOnLine;
     }
 
-    public String getColor() {
+    public ColorLine getColor() {
         return color;
     }
 
-    public void setColor(String color) {
+    public void setColor(ColorLine color) {
         this.color = color;
     }
 
-    public ArrayList<Station> getStationsOnLine() {
+    public List<Station> getStationsOnLine() {
         return stationsOnLine;
     }
 
-    public void setStationsOnLine(ArrayList<Station> stationsOnLine) {
+    public void setStationsOnLine(List<Station> stationsOnLine) {
         this.stationsOnLine = stationsOnLine;
     }
 
