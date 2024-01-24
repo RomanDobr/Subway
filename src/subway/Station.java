@@ -108,8 +108,10 @@ public class Station {
                 if (pair.getKey() == localDate) {
                     double value = pair.getValue() + summa;
                     pair.setValue(value);
+                    return mapTmp;
                 }
             }
+            mapTmp.put(localDate, summa);
             return mapTmp;
         }
         this.cash.income.put(localDate, summa);
