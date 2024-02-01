@@ -1,15 +1,20 @@
 package metro.src.subway;
 
+import java.math.BigDecimal;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
+import java.time.LocalDate;
+import java.util.*;
+
+
+
 
 
 public class Subway {
     private String city;
     private Station station;
     private SubwayLine line;
-    private List<SubwayLine> lines = new ArrayList<>();
+    private Set<SubwayLine> lines =  new LinkedHashSet<>();
+    private Map<String, LocalDate> ticketsOnMonth = new LinkedHashMap<>(10_000);
 
     public Subway(String city) {
         this.city = city;
@@ -17,253 +22,275 @@ public class Subway {
 
     public void createNewLine(ColorLine colorLine, Subway subway) {
         checkColorLinesExists(colorLine.getColor());
-        lines.add(new SubwayLine(colorLine, new ArrayList<>(), subway));
+        lines.add(new SubwayLine(colorLine,  new LinkedHashSet<>(), subway));
     }
 
-    public void createFirstStationOnLine(ColorLine colorLine, String nameStation, Subway subway) {
+    /**
+     * Создать первую станцию в линии
+     */
+    public Station createFirstStationOnLine(ColorLine colorLine, String nameStation, Subway subway, Cash cash) {
         checkColorLinesNotExists(colorLine.getColor());
         checkNotNameStation(lines, nameStation);
-
+        Station station = null;
         for (SubwayLine line : lines) {
             if (line.getStationsOnLine().size() == 0 && line.getColor().equals(colorLine)) {
-                line.getStationsOnLine().add(new Station(nameStation, line, subway));
+                station = new Station(nameStation, line, subway, new Cash());
+                line.getStationsOnLine().add(station);
+                return station;
             }
         }
+        return null;
     }
 
-    public void createEndStation(String nameStation, ColorLine colorLine, Subway subway,
-                                 String prevStation, String nextStation, Duration drivingTime,
-                                 ArrayList<Station> changeLines) {
+    /**
+     * Создать последнюю станцию в линии
+     */
+    public Station createEndStation(String nameStation, ColorLine colorLine, Subway subway,
+                                 Station prevStation, Station nextStation, Duration drivingTime,
+                                 Set<Station> changeLines, Cash cash) {
 
         checkColorLinesNotExists(colorLine.getColor()); // -Линия с таким именем существует
         checkPrevStation(colorLine, prevStation); //-Проверка на существование предыдущей станции.
-        addDurationTime(colorLine, drivingTime); //-Время перегона больше 0, добавление времени в предыдущую станцию
+        addDurationTime(colorLine, drivingTime, prevStation); //-Время перегона больше 0, добавление времени в предыдущую станцию
         checkNotNameStation(lines, nameStation); //-Станции с таким именем не существует во всех линиях.
-        addNamePrevStationToNameNextStation(nameStation, colorLine); //предыдущей станции заносим имя следующей станции
-
         SubwayLine line = findLine(lines, colorLine);
-        line.getStationsOnLine().add(new Station(nameStation, line, subway,
-                                         prevStation, nextStation, drivingTime, changeLines));
+        Station station = new Station(nameStation, line, subway,
+                prevStation, nextStation, drivingTime, changeLines, cash);
+        line.getStationsOnLine().add(station);
+        addNamePrevStationToNameNextStation(nameStation, prevStation, colorLine); //предыдущей станции заносим имя следующей станции
+        return station;
     }
 
-    //2.1 определения станции на пересадку
-    public Station getStationOnChange(ColorLine colorLine1, String line2) {
+    /**
+     * определения станции на пересадку
+     */
+    protected Station getStationOnChange(ColorLine colorLine1) {
         SubwayLine lineOne = findLine(lines, colorLine1);
+        return getStationOnChangeHelper(lineOne);
+    }
+
+    private Station getStationOnChangeHelper(SubwayLine lineOne) {
         Station resultStation = null;
         for (Station station : lineOne.getStationsOnLine()) {
-            if ((station.getChangeLines() != null) && station.getChangeLines()
-                    .get(0)
-                    .getSubwayLine()
-                    .getColor().getColor()
-                    .equals(line2)) {
-                resultStation = station;
+            if ((station.getChangeLines() != null)) {
+                for (Station changeLine : station.getChangeLines()) {
+                    resultStation = changeLine;
+                }
             }
         }
         return resultStation;
     }
 
-    //2.2 количество перегонов между станциями по Next
-    private int getStageByNextStation(String nameStartStation, String nameEndStation) {
-        if (getListStationOnLine(nameStartStation, nameEndStation) == null) {
+    /**
+     * количество перегонов между станциями по Next на одной линии
+     */
+    public int getStageByNextStation(Station nameStartStation, Station nameEndStation) {
+        if (!checkNameStationOnLine(nameStartStation, nameEndStation) || nameStartStation.getNextStation() == null) {
             return -1;
         }
-        Station stationStart = getListStationOnLine(nameStartStation, nameEndStation).get(0);
-        Station stationEnd = getListStationOnLine(nameStartStation, nameEndStation).get(1);
+        List<Station> listTmp = new LinkedList<>();
+        for (Station station : nameStartStation.getSubwayLine().getStationsOnLine()) {
+            listTmp.add(station);
+        }
         int i = 0;
-        int indexStartStation = stationEnd.getSubwayLine().getStationsOnLine().indexOf(stationStart);
-        int indexEndStation = stationEnd.getSubwayLine().getStationsOnLine().indexOf(stationEnd);
-        for (int y = indexStartStation; y < indexEndStation; y++) {
-            if (stationStart.getSubwayLine().getStationsOnLine().get(y).getNextStation().equals(nameEndStation)) {
-                i++;
-                return i;
+        for (int y = listTmp.indexOf(nameStartStation); y < listTmp.size(); y++) {
+            if (listTmp.get(y).getNextStation() == null) {
+                break;
             }
-            i++;
+            if (listTmp.get(y).getNextStation().getName().equals(nameEndStation.getName())) {
+                return ++i;
+            }
+            ++i;
         }
         return -1;
     }
 
-    //2.3 количество перегонов между станциями по Prev
-    private int getStageByPrevStation(String nameStartStation, String nameEndStation) {
-        if (getListStationOnLine(nameStartStation, nameEndStation) == null) {
+    /**
+     * количество перегонов между станциями по Prev
+     */
+    public int getStageByPrevStation(Station nameStartStation, Station nameEndStation) {
+        if (!checkNameStationOnLine(nameStartStation, nameEndStation) || nameStartStation.getPrevStation() == null) {
             return -1;
         }
-        Station stationStart = getListStationOnLine(nameStartStation, nameEndStation).get(0);
-        Station stationEnd = getListStationOnLine(nameStartStation, nameEndStation).get(1);
+        List<Station> listTmp = new LinkedList<>();
+        for (Station station : nameStartStation.getSubwayLine().getStationsOnLine()) {
+            listTmp.add(station);
+        }
+        Collections.reverse(listTmp);
         int i = 0;
-        int indexEndStation = stationEnd.getSubwayLine().getStationsOnLine().indexOf(stationEnd);
-        int indexStartStation = stationEnd.getSubwayLine().getStationsOnLine().indexOf(stationStart);
-        for (int y = indexEndStation; y >= indexStartStation; y--) {
-            if (stationEnd.getSubwayLine().getStationsOnLine().get(y).getPrevStation().equals(nameStartStation)) {
-                i++;
-                return i;
+        for (int y = listTmp.indexOf(nameStartStation); y < listTmp.size(); y++) {
+            if (listTmp.get(y).getPrevStation() == null) {
+                break;
             }
-            i++;
+            if (listTmp.get(y).getPrevStation().getName().equals(nameEndStation.getName())) {
+                return ++i;
+            }
+            ++i;
         }
         return -1;
     }
 
-    //2.4 количество перегонов между станциями по Prev и Next
-    private int getCountStageBetweenOnLine(String nameStartStation, String nameEndStation) {
+    /**
+     * количество перегонов между станциями по Prev и Next
+     */
+    public int getCountStageBetweenOnLine(Station nameStartStation, Station nameEndStation) {
         int i = getStageByNextStation(nameStartStation, nameEndStation);
         int y = getStageByPrevStation(nameStartStation, nameEndStation);
         if ((i == -1) && (y == -1)) {
-            throw new RuntimeException("нет пути от начальной " + nameStartStation + " до " + nameEndStation);
+            throw new RuntimeException("нет пути от начальной " + nameStartStation.getName() + " до " + nameEndStation.getName());
         }
 
+        if ((i == -1) && (y != -1)) {
+            return y;
+        } else if ((i != -1) && (y == -1)) {
+            return i;
+        }
         return (i == y) ? i : -1;
     }
 
-    //2.5 количества перегонов если станции находятся на разных линиях
-    public int getCountStageDifferentLines(String nameStartStation, String nameEndStation) {
-        if (nameStartStation.equals(nameEndStation)) {
+    /**
+     * количества перегонов если станции находятся на разных линиях
+     */
+    public int getCountStageDifferentLines(Station nameStartStation, Station nameEndStation) {
+        if (equalNames(nameStartStation, nameEndStation)) {
             return -1;
         }
-        List<Station> listStationTmp = getListStation(nameStartStation, nameEndStation);
         int i = 0;
-        if (listStationTmp.get(0).getSubwayLine().getColor().equals(listStationTmp.get(1).getSubwayLine().getColor())) {
-            i = getCountStageBetweenOnLine(nameStartStation, nameEndStation);
-            return i;
+        if (!checkNameStationOnLine(nameStartStation, nameEndStation)) {
+            if (nameStartStation.getSubwayLine().getColor().equals(nameEndStation.getSubwayLine().getColor())) {
+                i = getCountStageBetweenOnLine(nameStartStation, nameEndStation);
+                return i;
+            }
         }
-        Station stationForChange = getStationOnChange(listStationTmp.get(0).getSubwayLine().getColor(),
-                listStationTmp.get(1).getSubwayLine().getColor().getColor());
-        i = getCountStageBetweenOnLine(nameStartStation, stationForChange.getName());
-        i += getCountStageBetweenOnLine(stationForChange.getChangeLines().get(0).getName(), nameEndStation);
+        Station stationForChange = getStationOnChange(nameStartStation.getSubwayLine().getColor());
+        Station changeStation = null;
+        for (Station stationTmp : nameStartStation.getSubwayLine().getStationsOnLine()) {
+            if (stationTmp.getChangeLines() != null) {
+                changeStation = stationTmp;
+            }
+        }
+        i = getCountStageBetweenOnLine(nameStartStation, changeStation);
+        i += getCountStageBetweenOnLine(stationForChange, nameEndStation);
         return i;
     }
 
-    private List<Station> getListStationOnLine(String nameStartStation, String nameEndStation) {
-        Station stationStart = null;
-        Station stationEnd = null;
-        for (SubwayLine line : lines) {
-            for (Station station : line.getStationsOnLine()) {
-                if (station.getName().equals(nameStartStation)) {
-                    stationStart = station;
-                }
-                if (station.getName().equals(nameEndStation)) {
-                    stationEnd = station;
-                }
-            }
+    /**
+     * проверяем, найденные станции находятся на одной ли линии или нет
+     */
+    private boolean checkNameStationOnLine(Station nameStartStation, Station nameEndStation) {
+        if (equalNames(nameStartStation, nameEndStation)) {
+            return false;
         }
-        List<Station> listStation = null;
-        //проверяем, найденные станции находятся на одной ли линии или нет
-        if (stationStart.getSubwayLine().getColor().equals(stationEnd.getSubwayLine().getColor())) {
-            listStation = List.of(stationStart, stationEnd);
+
+        if (nameStartStation.getSubwayLine().getStationsOnLine().contains(nameEndStation)) {
+            return true;
         }
-        return listStation;
+        return false;
     }
 
-    private List<Station> getListStation(String nameStartStation, String nameEndStation) {
-        Station stationStart = null;
-        Station stationEnd = null;
-        for (SubwayLine line : lines) {
-            for (Station station : line.getStationsOnLine()) {
-                if (station.getName().equals(nameStartStation)) {
-                    stationStart = station;
-                }
-                if (station.getName().equals(nameEndStation)) {
-                    stationEnd = station;
-                }
-            }
+    private boolean equalNames(Station nameStartStation, Station nameEndStation) {
+        if (nameStartStation.getName().equals(nameEndStation.getName())) {
+            return true;
         }
-        List<Station> listStation = List.of(stationStart, stationEnd);
-        return listStation;
+        return false;
     }
 
-
-    public void createChangeLines(String station1, String station2) {
-        Station stationOne = null;
-        Station stationTwo = null;
-        for (SubwayLine line : lines) {
-            for (Station station : line.getStationsOnLine()) {
-                if (station.getName().equals(station1)) {
-                    stationOne = station;
-                }
-                if (station.getName().equals(station2)) {
-                    stationTwo = station;
-                }
-            }
-        }
-        ArrayList<Station> changeLines1 = new ArrayList<>();
-        ArrayList<Station> changeLines2 = new ArrayList<>();
-        changeLines1.add(stationTwo);
-        changeLines2.add(stationOne);
-        stationOne.setChangeLines(changeLines1);
-        stationTwo.setChangeLines(changeLines2);
-
+    public void createChangeLines(Station station1, Station station2) {
+        Set<Station> setLine1 = new HashSet<>();
+        Set<Station> setLine2 = new HashSet<>();
+        setLine1.add(station2);
+        setLine2.add(station1);
+        station1.setChangeLines(setLine1);
+        station2.setChangeLines(setLine2);
     }
 
-    private void checkNotNameStation(List<SubwayLine> lines, String nameStation) {
+    private void checkNotNameStation(Set<SubwayLine> lines, String nameStation) {
         for (SubwayLine line : lines) {
-            for (Station station : line.getStationsOnLine()) {
-                if (station.getName().equals(nameStation)) {
-                    throw new RuntimeException("Станция с " + nameStation + " существует");
-                }
+            checkHelperStation(line, nameStation, "Станция с " + nameStation + " существует");
+        }
+    }
+
+    private void checkHelperStation(SubwayLine line, String nameStation, String message) {
+        for (Station station : line.getStationsOnLine()) {
+            if (station.getName().equals(nameStation)) {
+                throw new RuntimeException(message);
             }
         }
     }
 
     private void checkColorLinesExists(String colorLine) {
         if (lines.size() != 0) {
-            for (SubwayLine line : lines) {
-                if (line.getColor().getColor().equals(colorLine)) {
-                    throw new RuntimeException("Линия с " + colorLine + " существует");
-                }
+            checkHelperColor(colorLine, "Линия с " + colorLine + " существует");
+        }
+    }
+
+    private void checkHelperColor(String colorLine, String message) {
+        for (SubwayLine line : lines) {
+            if (line.getColor().getColor().equals(colorLine)) {
+                throw new RuntimeException(message);
             }
         }
     }
 
     private void checkColorLinesNotExists(String colorLine) {
-        if (lines.size() != 0) {
-            for (SubwayLine line : lines) {
-                if (line.getColor().getColor().equals(colorLine)) {
-                    return;
-                }
-            }
+        if (lines.size() != 0 && checkColorLinesNotExistsHelper(colorLine)) {
+            return;
         }
         throw new RuntimeException("Линия " + colorLine + " не существует");
     }
 
-    private boolean checkPrevStation(ColorLine colorLine, String prevStation) {
+    private boolean checkColorLinesNotExistsHelper(String colorLine) {
+        for (SubwayLine line : lines) {
+            if (line.getColor().getColor().equals(colorLine)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean checkPrevStation(ColorLine colorLine, Station prevStation) {
         SubwayLine line = findLine(lines, colorLine);
         int i = line.getStationsOnLine().size();
         if (i > 0) {
-            if (line.getStationsOnLine()
-                    .get(i - 1)
-                    .getName()
-                    .equals(prevStation)
-                    && line
-                    .getStationsOnLine()
-                    .get(i - 1).getNextStation() == null) {
+            if (line.getStationsOnLine().contains(prevStation)) {
                 return true;
             }
         }
         throw new RuntimeException("Это не последняя станция");
     }
 
-    private void addDurationTime(ColorLine colorLine, Duration drivingTime) {
-        if (!checkDurationTimeNotNull(colorLine, drivingTime)) {
+    private void addDurationTime(ColorLine colorLine, Duration drivingTime, Station prevStation) {
+        if (!checkDurationTimeNotNull(colorLine, drivingTime, prevStation)) {
             SubwayLine line = findLine(lines, colorLine);
-            if (line.getColor().equals(colorLine)) {
-                line.getStationsOnLine().get(line.getStationsOnLine().size() - 1).setDrivingTime(drivingTime);
+            if (line.getStationsOnLine().contains(prevStation)) {
+                prevStation.setDrivingTime(drivingTime);
             }
         }
     }
 
-    private boolean checkDurationTimeNotNull(ColorLine colorLine, Duration drivingTime) {
+    private boolean checkDurationTimeNotNull(ColorLine colorLine, Duration drivingTime,  Station prevStation) {
         SubwayLine line = findLine(lines, colorLine);
-        Duration time = line.getStationsOnLine().get(line.getStationsOnLine().size() - 1).getDrivingTime();
+        Duration time =  prevStation.getDrivingTime();
         if (time == null || time.getSeconds() == 0L) {
             return false;
         }
         return true;
     }
 
-    private void addNamePrevStationToNameNextStation(String nameStation, ColorLine colorLine) {
+    private void addNamePrevStationToNameNextStation(String nameStation, Station prevStation, ColorLine colorLine) {
         SubwayLine line = findLine(lines, colorLine);
-        line.getStationsOnLine().get(line.getStationsOnLine().size() - 1).setNextStation(nameStation);
+        Station stationTmp = null;
+        for (Station station : line.getStationsOnLine()) {
+            if (station.getName().equals(nameStation)) {
+                stationTmp = station;
+            }
+        }
+        if (line.getStationsOnLine().contains(prevStation)) {
+            prevStation.setNextStation(stationTmp);
+        }
     }
 
-    private SubwayLine findLine(List<SubwayLine> lines, ColorLine colorLine) {
+    private SubwayLine findLine(Set<SubwayLine> lines, ColorLine colorLine) {
         SubwayLine result = null;
         for (SubwayLine line : lines) {
             if (line.getColor().equals(colorLine)) {
@@ -273,17 +300,50 @@ public class Subway {
         return result;
     }
 
-    public List<SubwayLine> getLines() {
+    public Set<SubwayLine> getLines() {
         return lines;
     }
 
-    public Station getStation() {
-        return station;
+    public void setTicketOnMonth(LocalDate localDate) {
+        int index = this.ticketsOnMonth.size();
+        String str = String.format("%s%04d", "a", index);
+        ticketsOnMonth.put(str, localDate.plusMonths(1));
     }
 
-    public void setStation(Station station) {
-        this.station = station;
+    public void setTicketOnMonth(String numberTicket, LocalDate localDate) {
+        this.ticketsOnMonth.put(numberTicket, localDate);
     }
+
+    protected boolean checkTicketOnMonth(String numberTicket, LocalDate localDate) {
+        if (this.ticketsOnMonth.containsKey(numberTicket)) {
+            if (localDate.isBefore(this.ticketsOnMonth.get(numberTicket))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void printIncomeAllCash() {
+        Map<LocalDate, BigDecimal> mapResult = new LinkedHashMap<>();
+        for (SubwayLine line : lines) {
+            for (Station station : line.getStationsOnLine()) {
+                for (Map.Entry<LocalDate, BigDecimal> pair : station.getCash().income.entrySet()) {
+                    LocalDate key = pair.getKey();
+                    BigDecimal value = pair.getValue();
+                    if (mapResult.containsKey(key)) {
+                        BigDecimal tmp = mapResult.get(key);
+                        tmp = tmp.add(value);
+                        mapResult.put(key, tmp);
+                    }
+                    mapResult.put(key, value);
+                }
+            }
+        }
+        for (Map.Entry<LocalDate, BigDecimal> pair : mapResult.entrySet()) {
+            System.out.println(pair.getKey().toString() + " - " + pair.getValue().toString());
+        }
+    }
+
 
     @Override
     public String toString() {

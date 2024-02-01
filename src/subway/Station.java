@@ -1,23 +1,27 @@
 package metro.src.subway;
 
+import metro.src.subway.Subway;
+import metro.src.subway.SubwayLine;
+
 import java.time.Duration;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.Objects;
+import java.util.Set;
+
 
 public class Station {
     private String name;
-    private String prevStation;
-    private String nextStation;
+    private Station prevStation;
+    private Station nextStation;
     private Duration drivingTime;
     private SubwayLine subwayLine;
-    private List<Station> changeLines;
+    private Set<Station> changeLines = new LinkedHashSet<>();
     private Subway subway;
-    private Cash cash;
+    private Cash cash = new Cash();
 
-    public Station(String name, SubwayLine subwayLine, Subway subway, String prevStation,
-                   String nextStation, Duration drivingTime,  ArrayList<Station> changeLines) {
+    public Station(String name, SubwayLine subwayLine, Subway subway, Station prevStation,
+                   Station nextStation, Duration drivingTime,  Set<Station> changeLines, Cash cash) {
         this.name = name;
         this.prevStation = prevStation;
         this.nextStation = nextStation;
@@ -25,37 +29,41 @@ public class Station {
         this.subwayLine = subwayLine;
         this.changeLines = changeLines;
         this.subway = subway;
-        this.cash = new Cash();
+        this.cash = cash;
     }
 
-    public Station(String name, SubwayLine subwayLine, Subway subway) {
+    public Station(String name, SubwayLine subwayLine, Subway subway, Cash cash) {
         this.name = name;
         this.subwayLine = subwayLine;
         this.subway = subway;
-        this.cash = new Cash();
+        this.cash = cash;
     }
 
     public String getName() {
         return name;
     }
 
+    protected Cash getCash() {
+        return cash;
+    }
+
     public void setName(String name) {
         this.name = name;
     }
 
-    public String getPrevStation() {
+    public Station getPrevStation() {
         return prevStation;
     }
 
-    public void setPrevStation(String prevStation) {
+    public void setPrevStation(Station prevStation) {
         this.prevStation = prevStation;
     }
 
-    public String getNextStation() {
+    public Station getNextStation() {
         return nextStation;
     }
 
-    public void setNextStation(String nextStation) {
+    public void setNextStation(Station nextStation) {
         this.nextStation = nextStation;
     }
 
@@ -75,7 +83,7 @@ public class Station {
         this.subwayLine = subwayLine;
     }
 
-    public List<Station> getChangeLines() {
+    public Set<Station> getChangeLines() {
         return changeLines;
     }
 
@@ -83,45 +91,40 @@ public class Station {
         return subway;
     }
 
-    public void setChangeLines(ArrayList<Station> changeLines) {
+    public void setChangeLines(Set<Station> changeLines) {
         this.changeLines = changeLines;
     }
 
-    protected ColorLine getNameLine() {
-        if (this.changeLines != null) {
-            for (Station station : this.changeLines) {
-                return station.getSubwayLine().getColor();
+    public void getTickets(LocalDate localDate, Station nameStartStation, Station nameEndStation) {
+        this.cash.ticketSelling(localDate, nameStartStation, nameEndStation);
+    }
+
+    public void saleTicketsOnMonth(LocalDate localDate) {
+        subway.setTicketOnMonth(localDate);
+        this.cash.ticketSellingOnMonth(localDate);
+    }
+
+    public void renewTicket(String numberTicket, LocalDate localDate) {
+        LocalDate newDate = localDate.minusMonths(1);
+        subway.setTicketOnMonth(numberTicket, newDate);
+        this.cash.ticketSellingOnMonth(localDate);
+    }
+
+    private String getLineColor() {
+        String str = this.getSubwayLine().getColor().getColor();
+        if (changeLines != null) {
+            for (Station station : changeLines) {
+                return str += " , " + station.getSubwayLine().getColor().getColor();
             }
         }
         return null;
-    }
-
-    public Map<LocalDate, Double> ticketSelling(LocalDate localDate, String nameStartStation, String nameEndStation) {
-        if (nameStartStation.equals(nameEndStation)) {
-            return null;
-        }
-        int countStage = subway.getCountStageDifferentLines(nameStartStation, nameEndStation);
-        double summa = (countStage * 5) + 20;
-        Map<LocalDate, Double> mapTmp = this.cash.income;
-        if (mapTmp.size() != 0) {
-            for (Map.Entry<LocalDate, Double> pair : mapTmp.entrySet()) {
-                if (pair.getKey() == localDate) {
-                    double value = pair.getValue() + summa;
-                    pair.setValue(value);
-                    return mapTmp;
-                }
-            }
-            mapTmp.put(localDate, summa);
-            return mapTmp;
-        }
-        this.cash.income.put(localDate, summa);
-        return mapTmp;
     }
 
     @Override
     public String toString() {
         return "Station{"
                 + "name='" + name + '\''
-                + ", changeLines=" + this.getNameLine() + '}';
+                + ", changeLines=" + getLineColor()
+                + '}';
     }
 }
