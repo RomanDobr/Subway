@@ -5,10 +5,6 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.*;
 
-
-
-
-
 public class Subway {
     private String city;
     private Station station;
@@ -39,7 +35,7 @@ public class Subway {
                 return station;
             }
         }
-        return null;
+        throw new RuntimeException("Отсутствует линия");
     }
 
     /**
@@ -88,19 +84,17 @@ public class Subway {
         if (!checkNameStationOnLine(nameStartStation, nameEndStation) || nameStartStation.getNextStation() == null) {
             return -1;
         }
-        List<Station> listTmp = new LinkedList<>();
-        for (Station station : nameStartStation.getSubwayLine().getStationsOnLine()) {
-            listTmp.add(station);
-        }
-        int i = 0;
-        for (int y = listTmp.indexOf(nameStartStation); y < listTmp.size(); y++) {
-            if (listTmp.get(y).getNextStation() == null) {
+        List<Station> listStation = new LinkedList<>();
+        listStation.addAll(nameStartStation.getSubwayLine().getStationsOnLine());
+        int count = 0;
+        for (int y = listStation.indexOf(nameStartStation); y < listStation.size(); y++) {
+            if (listStation.get(y).getNextStation() == null) {
                 break;
             }
-            if (listTmp.get(y).getNextStation().getName().equals(nameEndStation.getName())) {
-                return ++i;
+            if (listStation.get(y).getNextStation().getName().equals(nameEndStation.getName())) {
+                return ++count;
             }
-            ++i;
+            ++count;
         }
         return -1;
     }
@@ -112,20 +106,18 @@ public class Subway {
         if (!checkNameStationOnLine(nameStartStation, nameEndStation) || nameStartStation.getPrevStation() == null) {
             return -1;
         }
-        List<Station> listTmp = new LinkedList<>();
-        for (Station station : nameStartStation.getSubwayLine().getStationsOnLine()) {
-            listTmp.add(station);
-        }
-        Collections.reverse(listTmp);
-        int i = 0;
-        for (int y = listTmp.indexOf(nameStartStation); y < listTmp.size(); y++) {
-            if (listTmp.get(y).getPrevStation() == null) {
+        List<Station> listStation = new LinkedList<>();
+        listStation.addAll(nameStartStation.getSubwayLine().getStationsOnLine());
+        Collections.reverse(listStation);
+        int count = 0;
+        for (int y = listStation.indexOf(nameStartStation); y < listStation.size(); y++) {
+            if (listStation.get(y).getPrevStation() == null) {
                 break;
             }
-            if (listTmp.get(y).getPrevStation().getName().equals(nameEndStation.getName())) {
-                return ++i;
+            if (listStation.get(y).getPrevStation().getName().equals(nameEndStation.getName())) {
+                return ++count;
             }
-            ++i;
+            ++count;
         }
         return -1;
     }
@@ -134,18 +126,17 @@ public class Subway {
      * количество перегонов между станциями по Prev и Next
      */
     public int getCountStageBetweenOnLine(Station nameStartStation, Station nameEndStation) {
-        int i = getStageByNextStation(nameStartStation, nameEndStation);
-        int y = getStageByPrevStation(nameStartStation, nameEndStation);
-        if ((i == -1) && (y == -1)) {
+        int byNextStation = getStageByNextStation(nameStartStation, nameEndStation);
+        int byPrevStation = getStageByPrevStation(nameStartStation, nameEndStation);
+        if ((byNextStation == -1) && (byPrevStation == -1)) {
             throw new RuntimeException("нет пути от начальной " + nameStartStation.getName() + " до " + nameEndStation.getName());
         }
-
-        if ((i == -1) && (y != -1)) {
-            return y;
-        } else if ((i != -1) && (y == -1)) {
-            return i;
+        if ((byNextStation == -1) && (byPrevStation != -1)) {
+            return byPrevStation;
+        } else if ((byNextStation != -1) && (byPrevStation == -1)) {
+            return byNextStation;
         }
-        return (i == y) ? i : -1;
+        return (byNextStation == byPrevStation) ? byNextStation : -1;
     }
 
     /**
@@ -155,11 +146,11 @@ public class Subway {
         if (equalNames(nameStartStation, nameEndStation)) {
             return -1;
         }
-        int i = 0;
+        int countByStage = 0;
         if (!checkNameStationOnLine(nameStartStation, nameEndStation)) {
             if (nameStartStation.getSubwayLine().getColor().equals(nameEndStation.getSubwayLine().getColor())) {
-                i = getCountStageBetweenOnLine(nameStartStation, nameEndStation);
-                return i;
+                countByStage = getCountStageBetweenOnLine(nameStartStation, nameEndStation);
+                return countByStage;
             }
         }
         Station stationForChange = getStationOnChange(nameStartStation.getSubwayLine().getColor());
@@ -169,9 +160,9 @@ public class Subway {
                 changeStation = stationTmp;
             }
         }
-        i = getCountStageBetweenOnLine(nameStartStation, changeStation);
-        i += getCountStageBetweenOnLine(stationForChange, nameEndStation);
-        return i;
+        countByStage = getCountStageBetweenOnLine(nameStartStation, changeStation);
+        countByStage += getCountStageBetweenOnLine(stationForChange, nameEndStation);
+        return countByStage;
     }
 
     /**
@@ -211,10 +202,13 @@ public class Subway {
     }
 
     private void checkHelperStation(SubwayLine line, String nameStation, String message) {
-        for (Station station : line.getStationsOnLine()) {
-            if (station.getName().equals(nameStation)) {
-                throw new RuntimeException(message);
-            }
+        line.getStationsOnLine().stream()
+                .forEach(station -> filterCheckHelperStation(station, nameStation, message));
+    }
+
+    private void filterCheckHelperStation(Station station, String nameStation, String message) {
+        if (station.getName().equals(nameStation)) {
+            throw new RuntimeException(message);
         }
     }
 
@@ -225,10 +219,12 @@ public class Subway {
     }
 
     private void checkHelperColor(String colorLine, String message) {
-        for (SubwayLine line : lines) {
-            if (line.getColor().getColor().equals(colorLine)) {
-                throw new RuntimeException(message);
-            }
+        lines.forEach(line -> filterOnLineColor(line, colorLine, message));
+    }
+
+    private void filterOnLineColor(SubwayLine line, String colorLine, String message) {
+        if (line.getColor().getColor().equals(colorLine)) {
+            throw new RuntimeException(message);
         }
     }
 
@@ -240,18 +236,22 @@ public class Subway {
     }
 
     private boolean checkColorLinesNotExistsHelper(String colorLine) {
-        for (SubwayLine line : lines) {
-            if (line.getColor().getColor().equals(colorLine)) {
-                return true;
-            }
+        boolean checkColor = lines.stream()
+                .anyMatch(line -> filterOnLineColorExist(line, colorLine));
+        return checkColor;
+    }
+
+    private boolean filterOnLineColorExist(SubwayLine line, String colorLine) {
+        if (line.getColor().getColor().equals(colorLine)) {
+            return true;
         }
         return false;
     }
 
     private boolean checkPrevStation(ColorLine colorLine, Station prevStation) {
         SubwayLine line = findLine(lines, colorLine);
-        int i = line.getStationsOnLine().size();
-        if (i > 0) {
+        int size = line.getStationsOnLine().size();
+        if (size > 0) {
             if (line.getStationsOnLine().contains(prevStation)) {
                 return true;
             }
@@ -327,20 +327,22 @@ public class Subway {
         Map<LocalDate, BigDecimal> mapResult = new LinkedHashMap<>();
         for (SubwayLine line : lines) {
             for (Station station : line.getStationsOnLine()) {
-                for (Map.Entry<LocalDate, BigDecimal> pair : station.getCash().income.entrySet()) {
-                    LocalDate key = pair.getKey();
-                    BigDecimal value = pair.getValue();
-                    if (mapResult.containsKey(key)) {
-                        BigDecimal tmp = mapResult.get(key);
-                        tmp = tmp.add(value);
-                        mapResult.put(key, tmp);
-                    }
-                    mapResult.put(key, value);
-                }
+                addCashToTotalResult(mapResult, station);
             }
         }
-        for (Map.Entry<LocalDate, BigDecimal> pair : mapResult.entrySet()) {
-            System.out.println(pair.getKey().toString() + " - " + pair.getValue().toString());
+        for (Map.Entry<LocalDate, BigDecimal> entry : mapResult.entrySet()) {
+            System.out.printf("%s - %s", entry.getKey(), entry.getValue());
+        }
+    }
+
+    private void addCashToTotalResult(Map<LocalDate, BigDecimal> mapResult, Station station) {
+        for (Map.Entry<LocalDate, BigDecimal> entry : station.getCash().income.entrySet()) {
+            LocalDate key = entry.getKey();
+            if (mapResult.containsKey(key)) {
+                mapResult.put(key, mapResult.get(key).add(entry.getValue()));
+            } else {
+                mapResult.put(key, entry.getValue());
+            }
         }
     }
 

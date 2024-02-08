@@ -1,12 +1,9 @@
 package metro.src.subway;
 
-import metro.src.subway.Subway;
-import metro.src.subway.SubwayLine;
 
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.LinkedHashSet;
-import java.util.Objects;
 import java.util.Set;
 
 
@@ -110,6 +107,15 @@ public class Station {
         this.cash.ticketSellingOnMonth(localDate);
     }
 
+    public int sale(Station nameStartStation, Station nameEndStation) {
+        if (nameStartStation.equals(nameEndStation)) {
+            return 0;
+        }
+        int countStage = nameStartStation.getSubway().getCountStageDifferentLines(nameStartStation, nameEndStation);
+        return (countStage * 5) + 20;
+    }
+
+
     private String getLineColor() {
         String str = this.getSubwayLine().getColor().getColor();
         if (changeLines != null) {
@@ -117,7 +123,7 @@ public class Station {
                 return str += " , " + station.getSubwayLine().getColor().getColor();
             }
         }
-        return null;
+        return "";
     }
 
     @Override

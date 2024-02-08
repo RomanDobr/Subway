@@ -42,8 +42,8 @@ public class Runner {
 
         subway.createChangeLines(perm1, tyazmash);
         System.out.println(subway.getLines().toString());
-        sportivnaya.saleTicketsOnMonth(LocalDate.now());
         sportivnaya.getTickets(LocalDate.now(), sobornaya, palaceCulture);
+        sportivnaya.saleTicketsOnMonth(LocalDate.now());
         subway.printIncomeAllCash();
     }
 }
